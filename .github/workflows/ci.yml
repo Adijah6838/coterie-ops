@@ -1,0 +1,65 @@
+name: Coterie Ops CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    # Advanced Requirement: Pipeline Caching
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    # Required Feature: Run Tests (Fails pipeline if tests fail)
+    - name: Test
+      run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=test_results.trx"
+
+    # Required Feature: Publish Build Artifact
+    - name: Publish
+      run: dotnet publish src/CoterieOps.Api/CoterieOps.Api.csproj -c Release -o ./publish
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-artifact
+        path: ./publish/
+
+    # Required Feature: Build Docker Image
+    - name: Build Docker Image
+      run: |
+        docker build -t coterieops-api:${{ github.sha }} .
+        docker build -t coterieops-api:latest .
+
+    # Advanced Requirement: Deployment Verification Stage
+    # Simulates a deployment check by running the container and hitting the health endpoint
+    - name: Verify Container Health
+      run: |
+        docker run -d -p 8080:8080 --name test-api coterieops-api:latest
+        sleep 5
+        curl -f http://localhost:8080/health || exit 1
+        docker stop test-api
+        docker rm test-api

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coterieops-api
+  labels:
+    app: coterieops-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: coterieops-api
+  template:
+    metadata:
+      labels:
+        app: coterieops-api
+    spec:
+      containers:
+      - name: api
+        image: coterieops-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        
+        # Advanced Requirement: Resource Requests and Limits
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "250m"
+            
+        # Advanced Requirement: Container Health Checks (Probes)
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5
